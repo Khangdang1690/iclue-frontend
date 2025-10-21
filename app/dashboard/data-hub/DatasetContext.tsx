@@ -19,27 +19,12 @@ import {
   BookOpen,
   Database,
 } from "lucide-react"
-
-interface DatasetContextData {
-  id: string
-  name: string
-  original_filename: string
-  domain: string
-  description: string
-  row_count: number
-  column_count: number
-  department: string | null
-  dataset_type: string | null
-  time_period: string | null
-  entities: string[]
-  typical_use_cases: string[]
-  business_context: Record<string, string>
-}
+import type { Dataset } from "@/lib/api/types"
 
 interface DatasetContextProps {
   isOpen: boolean
   onClose: () => void
-  dataset: DatasetContextData | null
+  dataset: Dataset | null
 }
 
 const getDomainColor = (domain: string) => {
@@ -62,7 +47,7 @@ export function DatasetContext({ isOpen, onClose, dataset }: DatasetContextProps
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="w-[500px] sm:w-[600px] overflow-y-auto">
         <SheetHeader className="space-y-4 pb-6 border-b border-border">
-          <SheetTitle className="text-2xl font-bold">{dataset.name}</SheetTitle>
+          <SheetTitle className="text-2xl font-bold">{dataset.table_name}</SheetTitle>
           <SheetDescription className="text-sm text-muted-foreground">
             {dataset.original_filename}
           </SheetDescription>
@@ -104,7 +89,7 @@ export function DatasetContext({ isOpen, onClose, dataset }: DatasetContextProps
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Rows</p>
                     <p className="font-mono font-semibold text-sm">
-                      {dataset.row_count.toLocaleString()}
+                      {dataset.row_count?.toLocaleString() || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -112,7 +97,7 @@ export function DatasetContext({ isOpen, onClose, dataset }: DatasetContextProps
                   <Database className="h-4 w-4 text-primary flex-shrink-0" />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Columns</p>
-                    <p className="font-mono font-semibold text-sm">{dataset.column_count}</p>
+                    <p className="font-mono font-semibold text-sm">{dataset.column_count || 'N/A'}</p>
                   </div>
                 </div>
               </div>

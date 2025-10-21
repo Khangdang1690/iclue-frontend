@@ -46,6 +46,7 @@ export interface DuplicateFileInfo {
   dataset_name: string;
   overlap_percentage: number;
   new_rows: number;
+  total_rows: number;
 }
 
 export interface ETLProgressUpdate {
@@ -72,7 +73,7 @@ export interface ETLProgressUpdate {
   metadata?: {
     overlap_percentage?: number;
     new_rows?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 
   // Completion data
@@ -84,9 +85,9 @@ export interface ETLProgressUpdate {
       dataset_id: string;
       dataset_name: string;
       status: string;
-      metadata: Record<string, any>;
+      metadata: Record<string, unknown>;
     }>;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

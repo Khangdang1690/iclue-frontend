@@ -59,15 +59,19 @@ export const etlService = {
     offset: number = 0
   ): Promise<{
     columns: string[];
-    rows: any[][];
+    rows: (string | number | null | boolean)[][];
     total_rows: number;
     limit: number;
     offset: number;
     has_more: boolean;
   }> {
-    return apiClient(`/api/etl/datasets/${datasetId}/data?limit=${limit}&offset=${offset}`, {
+    return apiClient(`/api/etl/datasets/${datasetId}/data`, {
       method: 'GET',
       userId,
+      params: {
+        limit: limit.toString(),
+        offset: offset.toString(),
+      },
     });
   },
 

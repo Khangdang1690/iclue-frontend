@@ -9,7 +9,7 @@ export class APIError extends Error {
   constructor(
     message: string,
     public status: number,
-    public data?: any
+    public data?: unknown
   ) {
     super(message);
     this.name = 'APIError';
@@ -39,9 +39,9 @@ export async function apiClient<T>(
   }
 
   // Build headers
-  const requestHeaders: HeadersInit = {
+  const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...headers,
+    ...(headers as Record<string, string>),
   };
 
   // Add authentication header if userId is provided
@@ -66,13 +66,21 @@ export async function apiClient<T>(
       );
     }
 
-    // Handle empty responses
+    // Handle different content types
     const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      return {} as T;
+
+    // Handle text/plain responses (like markdown reports)
+    if (contentType?.includes('text/plain') || contentType?.includes('text/markdown')) {
+      return await response.text() as T;
     }
 
-    return await response.json();
+    // Handle JSON responses
+    if (contentType?.includes('application/json')) {
+      return await response.json();
+    }
+
+    // Handle empty or unknown responses
+    return {} as T;
   } catch (error) {
     if (error instanceof APIError) {
       throw error;

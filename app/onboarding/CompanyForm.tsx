@@ -56,9 +56,7 @@ const formSchema = z.object({
   }).max(255, {
     message: "Company name must be less than 255 characters.",
   }),
-  industry: z.string({
-    required_error: "Please select an industry.",
-  }),
+  industry: z.string().min(1, "Please select an industry."),
 })
 
 export function CompanyForm() {
@@ -180,7 +178,7 @@ export function CompanyForm() {
                 </PopoverContent>
               </Popover>
               <FormDescription>
-                Your company's primary industry or sector.
+                Your company&apos;s primary industry or sector.
               </FormDescription>
               <FormMessage />
             </FormItem>

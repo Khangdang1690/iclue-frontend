@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { uploadFiles } from "@/lib/api/client"
 
 interface ProgressUpdate {
   step: string
@@ -88,20 +89,12 @@ export function FileUploader() {
     setError(null)
 
     try {
-      // Create FormData
-      const formData = new FormData()
-      selectedFiles.forEach(file => {
-        formData.append('files', file)
-      })
-
-      // Start upload with SSE streaming
-      const response = await fetch("http://localhost:8000/api/etl/upload", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${userId}`,
-        },
-        body: formData,
-      })
+      // Upload files using centralized API
+      const response = await uploadFiles(
+        "/api/etl/upload",
+        selectedFiles,
+        userId
+      )
 
       if (!response.ok) {
         throw new Error(`Upload failed: ${response.statusText}`)

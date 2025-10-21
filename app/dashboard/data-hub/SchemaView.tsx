@@ -13,6 +13,7 @@ import ReactFlow, {
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { etlService } from "@/lib/api"
+import type { Dataset } from "@/lib/api/types"
 import { DatasetNode } from "./DatasetNode"
 import { DatasetContext } from "./DatasetContext"
 import { getLayoutedElements } from "./layoutAlgorithm"
@@ -34,26 +35,14 @@ export function SchemaView({ userId, onDatasetClick }: SchemaViewProps) {
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [showDatasetContext, setShowDatasetContext] = React.useState(false)
-  const [datasetForContext, setDatasetForContext] = React.useState<any>(null)
-  const [datasetsMap, setDatasetsMap] = React.useState<Map<string, any>>(new Map())
+  const [datasetForContext, setDatasetForContext] = React.useState<Dataset | null>(null)
 
-  React.useEffect(() => {
-    loadSchema()
-  }, [userId])
-
-  const loadSchema = async () => {
+  const loadSchema = React.useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
     try {
       const schemaData = await etlService.getSchema(userId)
-
-      // Create a map of datasets for quick lookup
-      const datasetMap = new Map()
-      schemaData.datasets.forEach(dataset => {
-        datasetMap.set(dataset.id, dataset)
-      })
-      setDatasetsMap(datasetMap)
 
       // Transform datasets to nodes
       const initialNodes: Node[] = schemaData.datasets.map((dataset) => ({
@@ -69,7 +58,14 @@ export function SchemaView({ userId, onDatasetClick }: SchemaViewProps) {
             ? () => onDatasetClick(dataset.id, dataset.name)
             : undefined,
           onInfoClick: () => {
-            setDatasetForContext(dataset)
+            // Map schema dataset to Dataset type for context panel
+            setDatasetForContext({
+              ...dataset,
+              table_name: dataset.name,
+              status: 'ready' as const,
+              uploaded_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+            })
             setShowDatasetContext(true)
           },
         },
@@ -120,7 +116,11 @@ export function SchemaView({ userId, onDatasetClick }: SchemaViewProps) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId, onDatasetClick, setNodes, setEdges])
+
+  React.useEffect(() => {
+    loadSchema()
+  }, [loadSchema])
 
   if (isLoading) {
     return (

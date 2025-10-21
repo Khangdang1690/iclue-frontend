@@ -32,7 +32,7 @@ export interface AnalyticsResult {
   type: "anomaly" | "forecast" | "causal" | "variance";
   title: string;
   description: string;
-  data: any;
+  data: unknown;
 }
 
 export interface BusinessDiscoveryResponse {
@@ -44,10 +44,10 @@ export interface BusinessDiscoveryResponse {
   synthesized_insights: Insight[];
   recommendations: Recommendation[];
   analytics_results?: {
-    anomalies?: any[];
-    forecasts?: any[];
-    causal_relationships?: any[];
-    variance_decomposition?: any[];
+    anomalies?: unknown[];
+    forecasts?: unknown[];
+    causal_relationships?: unknown[];
+    variance_decomposition?: unknown[];
   };
   executive_summary?: string;
   dashboard_url?: string;
@@ -119,13 +119,15 @@ export const analysisService = {
     limit: number = 50,
     offset: number = 0
   ): Promise<ListAnalysesResponse> {
-    return apiClient<ListAnalysesResponse>(
-      `/api/analyses?user_id=${userId}&limit=${limit}&offset=${offset}`,
-      {
-        method: 'GET',
-        userId,
-      }
-    );
+    return apiClient<ListAnalysesResponse>('/api/analyses', {
+      method: 'GET',
+      userId,
+      params: {
+        user_id: userId,
+        limit: limit.toString(),
+        offset: offset.toString(),
+      },
+    });
   },
 
   /**
@@ -149,25 +151,21 @@ export const analysisService = {
    * Get report markdown content for an analysis
    */
   async getReport(userId: string, analysisId: string): Promise<string> {
-    const response = await fetch(`http://localhost:8000/api/analyses/${analysisId}/report`, {
+    return apiClient<string>(`/api/analyses/${analysisId}/report`, {
       method: 'GET',
+      userId,
       headers: {
         'Content-Type': 'text/plain',
       },
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch report: ${response.statusText}`);
-    }
-
-    return response.text();
   },
 
   /**
    * Get download URL for report
    */
   getDownloadUrl(analysisId: string): string {
-    return `/api/analyses/${analysisId}/download`;
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    return `${base}/api/analyses/${analysisId}/download`;
   },
 
   /**

@@ -14,8 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clue App",
-  description: "Authentication with Clerk",
+  title: "iclue.",
+  description: "Turn raw data into insights in minutes. AI-powered data analysis platform that automatically detects relationships and generates executive-ready dashboards.",
+  icons: {
+    icon: '/logo.svg',
+    shortcut: '/logo.svg',
+    apple: '/logo.svg',
+  },
 };
 
 export default function RootLayout({

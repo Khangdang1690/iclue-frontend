@@ -1,7 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Database, Upload } from "lucide-react";
+import { Database, Upload } from "lucide-react";
+import type { Dataset } from "@/lib/api/types";
+import { userService, etlService } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,42 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-async function checkUserCompany(userId: string) {
-  try {
-    const response = await fetch(`http://localhost:8000/api/me/${userId}`, {
-      cache: 'no-store'
-    });
-
-    if (response.ok) {
-      const userData = await response.json();
-      return userData.company_id;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error checking user company:", error);
-    return null;
-  }
-}
-
-async function getDatasets(userId: string) {
-  try {
-    const response = await fetch(`http://localhost:8000/api/etl/datasets`, {
-      headers: {
-        "Authorization": `Bearer ${userId}`,
-      },
-      cache: 'no-store'
-    });
-
-    if (response.ok) {
-      return await response.json();
-    }
-    return [];
-  } catch (error) {
-    console.error("Error fetching datasets:", error);
-    return [];
-  }
-}
-
 export default async function DatasetsPage() {
   const { userId } = await auth();
 
@@ -55,12 +21,12 @@ export default async function DatasetsPage() {
   }
 
   // Check if user has completed onboarding
-  const companyId = await checkUserCompany(userId);
+  const companyId = await userService.getUserCompany(userId);
   if (!companyId) {
     redirect('/onboarding');
   }
 
-  const datasets = await getDatasets(userId);
+  const datasets = await etlService.getDatasets(userId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -103,7 +69,7 @@ export default async function DatasetsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {datasets.map((dataset: any) => (
+            {datasets.map((dataset: Dataset) => (
               <Card key={dataset.id} className="hover:border-primary/50 transition-colors">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">

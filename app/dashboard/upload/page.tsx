@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { userService } from "@/lib/api";
 import { FileUploader } from "./FileUploader";
 import {
   Card,
@@ -9,23 +10,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-async function checkUserCompany(userId: string) {
-  try {
-    const response = await fetch(`http://localhost:8000/api/me/${userId}`, {
-      cache: 'no-store'
-    });
-
-    if (response.ok) {
-      const userData = await response.json();
-      return userData.company_id;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error checking user company:", error);
-    return null;
-  }
-}
-
 export default async function UploadPage() {
   const { userId } = await auth();
 
@@ -34,7 +18,7 @@ export default async function UploadPage() {
   }
 
   // Check if user has completed onboarding
-  const companyId = await checkUserCompany(userId);
+  const companyId = await userService.getUserCompany(userId);
   if (!companyId) {
     redirect('/onboarding');
   }

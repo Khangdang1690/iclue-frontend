@@ -1,6 +1,7 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Database, TrendingUp, Upload, BarChart3 } from "lucide-react";
+import type { Dataset } from "@/lib/api/types";
 import {
   Card,
   CardContent,
@@ -12,7 +13,6 @@ import { userService, etlService } from "@/lib/api";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
-  const user = await currentUser();
 
   if (!userId) {
     return null;
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {datasets.reduce((acc: number, ds: any) => acc + (ds.row_count || 0), 0).toLocaleString()}
+              {datasets.reduce((acc: number, ds: Dataset) => acc + (ds.row_count || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all datasets
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {datasets.slice(0, 5).map((dataset: any) => (
+                {datasets.slice(0, 5).map((dataset: Dataset) => (
                   <div key={dataset.id} className="flex items-center border-b border-border pb-3 last:border-0 last:pb-0">
                     <div className="flex h-8 w-8 items-center justify-center bg-muted">
                       <Database className="h-3.5 w-3.5" />

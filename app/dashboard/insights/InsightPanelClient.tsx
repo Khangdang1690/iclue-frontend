@@ -18,6 +18,7 @@ import type { Dataset } from "@/lib/api/types"
 import { AnalysisHistory } from "@/components/analysis/AnalysisHistory"
 import { DashboardViewer } from "@/components/analysis/DashboardViewer"
 import { ReportViewer } from "@/components/analysis/ReportViewer"
+import { AnalysisStream } from "@/components/analysis/AnalysisStream"
 
 interface InsightPanelClientProps {
   userId: string
@@ -29,6 +30,7 @@ export function InsightPanelClient({ userId }: InsightPanelClientProps) {
 
   // New analysis state
   const [isRunning, setIsRunning] = React.useState(false)
+  const [currentAnalysisId, setCurrentAnalysisId] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [datasets, setDatasets] = React.useState<Dataset[]>([])
   const [selectedDatasetIds, setSelectedDatasetIds] = React.useState<string[]>([])
@@ -50,6 +52,35 @@ export function InsightPanelClient({ userId }: InsightPanelClientProps) {
     }
     loadDatasets()
   }, [userId])
+
+  // Store currentAnalysisId in a ref so we always have the latest value
+  const currentAnalysisIdRef = React.useRef(currentAnalysisId)
+  React.useEffect(() => {
+    currentAnalysisIdRef.current = currentAnalysisId
+  }, [currentAnalysisId])
+
+  // Analysis completion handler - stable reference, reads from ref
+  const handleAnalysisComplete = React.useCallback(() => {
+    console.log('[INSIGHT-PANEL] ✅ Analysis complete callback triggered!')
+    const analysisId = currentAnalysisIdRef.current
+    console.log('[INSIGHT-PANEL] currentAnalysisId from ref:', analysisId)
+
+    if (!analysisId) {
+      console.error('[INSIGHT-PANEL] ❌ Cannot redirect - analysisId is null')
+      return
+    }
+
+    console.log('[INSIGHT-PANEL] Setting selectedAnalysisId to:', analysisId)
+    setSelectedAnalysisId(analysisId)
+
+    // Auto-redirect to results after a brief delay
+    console.log('[INSIGHT-PANEL] Starting 2s redirect timer...')
+    setTimeout(() => {
+      console.log('[INSIGHT-PANEL] Timer complete - switching to view tab')
+      setIsRunning(false)
+      setActiveTab('view')
+    }, 2000)
+  }, []) // No dependencies - stable reference
 
   const handleToggleDataset = (datasetId: string) => {
     setSelectedDatasetIds(prev =>
@@ -84,18 +115,18 @@ export function InsightPanelClient({ userId }: InsightPanelClientProps) {
 
       if (!response.success) {
         setError(response.error || "Analysis failed")
+        setIsRunning(false)
         return
       }
 
-      // Analysis completed! Switch to view tab to show results
+      // Start streaming the analysis
       if (response.analysis_id) {
-        setSelectedAnalysisId(response.analysis_id)
-        setActiveTab("view")
+        setCurrentAnalysisId(response.analysis_id)
+        // Don't set isRunning to false - let the streaming component handle completion
       }
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run analysis")
-    } finally {
       setIsRunning(false)
     }
   }
@@ -116,7 +147,7 @@ export function InsightPanelClient({ userId }: InsightPanelClientProps) {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'new' | 'history' | 'view')} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="new" className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
@@ -232,15 +263,25 @@ export function InsightPanelClient({ userId }: InsightPanelClientProps) {
               </div>
             )}
 
-            {isRunning && (
+            {/* Real-time streaming UI */}
+            {isRunning && currentAnalysisId && (
+              <div className="mb-6">
+                <AnalysisStream
+                  analysisId={currentAnalysisId}
+                  onComplete={handleAnalysisComplete}
+                />
+              </div>
+            )}
+
+            {isRunning && !currentAnalysisId && (
               <div className="flex items-center justify-center py-12 mb-6">
                 <div className="flex flex-col items-center gap-4">
                   <Loader2 className="h-12 w-12 text-primary animate-spin" />
                   <p className="text-lg text-muted-foreground">
-                    Analyzing your data...
+                    Starting analysis...
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    This may take a few minutes
+                    Preparing workflow
                   </p>
                 </div>
               </div>

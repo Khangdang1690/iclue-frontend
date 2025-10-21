@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Upload, X, FileText, CheckCircle2, AlertCircle, Database, Calendar, Layers, Trash2, Eye, Info } from "lucide-react"
+import { Upload, X, FileText, AlertCircle, Database, Trash2, Eye, Info } from "lucide-react"
 import { etlService } from "@/lib/api"
 import type { Dataset, ETLProgressUpdate } from "@/lib/api/types"
 import { Button } from "@/components/ui/button"
@@ -146,7 +146,7 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
               const dupFiles: DuplicateFile[] = []
 
               if (data.duplicates) {
-                Object.entries(data.duplicates).forEach(([fileName, dupInfo]: [string, any]) => {
+                Object.entries(data.duplicates).forEach(([fileName, dupInfo]: [string, { dataset_name: string; overlap_percentage: number; new_rows: number; total_rows: number }]) => {
                   dupFiles.push({
                     fileName,
                     datasetName: dupInfo.dataset_name,

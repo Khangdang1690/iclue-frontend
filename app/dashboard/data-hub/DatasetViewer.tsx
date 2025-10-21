@@ -21,7 +21,7 @@ interface DatasetViewerProps {
 
 export function DatasetViewer({ isOpen, onClose, datasetId, datasetName, userId }: DatasetViewerProps) {
   const [columns, setColumns] = React.useState<string[]>([])
-  const [rows, setRows] = React.useState<any[][]>([])
+  const [rows, setRows] = React.useState<(string | number | null | boolean)[][]>([])
   const [totalRows, setTotalRows] = React.useState(0)
   const [currentPage, setCurrentPage] = React.useState(0)
   const [isLoading, setIsLoading] = React.useState(false)

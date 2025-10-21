@@ -7,7 +7,6 @@
 
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { companyService } from '@/lib/api';
 import { CompanyCreate } from '@/lib/api/types';
 

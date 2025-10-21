@@ -30,6 +30,14 @@ export interface Dataset {
   status: 'ready' | 'processing' | 'error';
   uploaded_at: string;
   created_at: string;
+  // Business context fields
+  department?: string | null;
+  description?: string | null;
+  dataset_type?: string | null;
+  time_period?: string | null;
+  entities?: string[];
+  typical_use_cases?: string[];
+  business_context?: Record<string, string>;
 }
 
 export interface DuplicateFileInfo {

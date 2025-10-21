@@ -70,4 +70,50 @@ export const etlService = {
       userId,
     });
   },
+
+  /**
+   * Get schema view with all datasets and relationships
+   */
+  async getSchema(userId: string): Promise<{
+    datasets: Array<{
+      id: string;
+      name: string;
+      original_filename: string;
+      domain: string;
+      description: string;
+      row_count: number;
+      column_count: number;
+      columns: Array<{
+        name: string;
+        data_type: string;
+        semantic_type: string;
+        is_primary_key: boolean;
+        is_foreign_key: boolean;
+        business_meaning: string;
+        position: number;
+      }>;
+      department: string | null;
+      dataset_type: string | null;
+      time_period: string | null;
+      entities: string[];
+      typical_use_cases: string[];
+      business_context: Record<string, string>;
+    }>;
+    relationships: Array<{
+      id: string;
+      from_dataset_id: string;
+      to_dataset_id: string;
+      from_column: string;
+      to_column: string;
+      relationship_type: string;
+      confidence: number;
+      match_percentage: number;
+      join_strategy: string;
+    }>;
+  }> {
+    return apiClient('/api/etl/schema', {
+      method: 'GET',
+      userId,
+    });
+  },
 };

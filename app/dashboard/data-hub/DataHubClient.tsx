@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Upload, X, FileText, CheckCircle2, AlertCircle, Database, Calendar, Layers, Trash2, Eye } from "lucide-react"
+import { Upload, X, FileText, CheckCircle2, AlertCircle, Database, Calendar, Layers, Trash2, Eye, Info } from "lucide-react"
 import { etlService } from "@/lib/api"
 import type { Dataset, ETLProgressUpdate } from "@/lib/api/types"
 import { Button } from "@/components/ui/button"
@@ -21,8 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DuplicateModal } from "./DuplicateModal"
 import { DatasetViewer } from "./DatasetViewer"
+import { SchemaView } from "./SchemaView"
+import { DatasetContext } from "./DatasetContext"
 
 interface DataHubClientProps {
   initialDatasets: Dataset[]
@@ -59,6 +62,10 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
   // Dataset viewer state
   const [showDatasetViewer, setShowDatasetViewer] = React.useState(false)
   const [datasetToView, setDatasetToView] = React.useState<{ id: string; name: string } | null>(null)
+
+  // Dataset context state
+  const [showDatasetContext, setShowDatasetContext] = React.useState(false)
+  const [datasetForContext, setDatasetForContext] = React.useState<Dataset | null>(null)
 
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -247,11 +254,28 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
     setDatasetToView(null)
   }
 
+  const handleShowContext = (dataset: Dataset) => {
+    setDatasetForContext(dataset)
+    setShowDatasetContext(true)
+  }
+
+  const closeDatasetContext = () => {
+    setShowDatasetContext(false)
+    setDatasetForContext(null)
+  }
+
   return (
     <div className="space-y-6">
-      {/* Upload Section */}
-      {uploadStatus !== "uploading" && (
-        <Card>
+      <Tabs defaultValue="datasets" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="datasets">Datasets</TabsTrigger>
+          <TabsTrigger value="schema">Schema View</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="datasets" className="space-y-6 mt-6">
+          {/* Upload Section */}
+          {uploadStatus !== "uploading" && (
+            <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Upload Files</CardTitle>
             <CardDescription className="text-xs">
@@ -472,7 +496,14 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
                   <div className="col-span-2 text-xs text-muted-foreground">
                     {new Date(dataset.uploaded_at).toLocaleString()}
                   </div>
-                  <div className="col-span-1 flex justify-end">
+                  <div className="col-span-1 flex justify-end gap-2">
+                    <button
+                      onClick={() => handleShowContext(dataset)}
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                      title="View dataset context"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => handleDeleteDataset(dataset.id, dataset.table_name)}
                       disabled={deletingDatasetId === dataset.id}
@@ -492,6 +523,12 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="schema" className="mt-6">
+          <SchemaView userId={userId} onDatasetClick={handleViewDataset} />
+        </TabsContent>
+      </Tabs>
 
       {/* Duplicate Detection Modal */}
       {duplicates.length > 0 && (
@@ -554,6 +591,13 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
           userId={userId}
         />
       )}
+
+      {/* Dataset Context Panel */}
+      <DatasetContext
+        isOpen={showDatasetContext}
+        onClose={closeDatasetContext}
+        dataset={datasetForContext}
+      />
     </div>
   )
 }

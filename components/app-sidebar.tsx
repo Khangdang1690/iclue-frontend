@@ -8,6 +8,7 @@ import {
   Settings,
   ChevronUp,
   User2,
+  Lightbulb,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -43,6 +44,11 @@ const items = [
     title: "Data Hub",
     url: "/dashboard/data-hub",
     icon: Database,
+  },
+  {
+    title: "Insight Panel",
+    url: "/dashboard/insights",
+    icon: Lightbulb,
   },
 ]
 

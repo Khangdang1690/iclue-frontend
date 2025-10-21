@@ -10,3 +10,4 @@ export * from './client';
 export { userService } from './users';
 export { companyService } from './companies';
 export { etlService } from './etl';
+export { analysisService } from './analysis';

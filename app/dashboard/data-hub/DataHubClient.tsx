@@ -3,9 +3,8 @@
 import * as React from "react"
 import { Upload, X, FileText, AlertCircle, Database, Trash2, Eye, Info } from "lucide-react"
 import { etlService } from "@/lib/api"
-import type { Dataset, ETLProgressUpdate } from "@/lib/api/types"
+import type { Dataset } from "@/lib/api/types"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import {
   Card,
   CardContent,
@@ -22,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { DuplicateModal } from "./DuplicateModal"
 import { DatasetViewer } from "./DatasetViewer"
 import { SchemaView } from "./SchemaView"
@@ -44,11 +44,21 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([])
   const [isDragging, setIsDragging] = React.useState(false)
   const [isUploading, setIsUploading] = React.useState(false)
-  const [progress, setProgress] = React.useState(0)
-  const [currentStep, setCurrentStep] = React.useState("")
-  const [statusMessage, setStatusMessage] = React.useState("")
+  const [messages, setMessages] = React.useState<Array<{ type: string; content: string }>>([])
   const [uploadStatus, setUploadStatus] = React.useState<"idle" | "uploading" | "success" | "error">("idle")
   const [error, setError] = React.useState<string | null>(null)
+
+  const scrollAreaRef = React.useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages arrive (scroll only the ScrollArea, not the page)
+  React.useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [messages])
 
   // Duplicate detection state (batch)
   const [duplicates, setDuplicates] = React.useState<DuplicateFile[]>([])
@@ -109,49 +119,85 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
   const handleUpload = async (forceActions?: Record<string, 'skip' | 'replace' | 'append_anyway'>) => {
     if (selectedFiles.length === 0) return
 
+    console.log('[DATA-HUB] Upload started with', selectedFiles.length, 'files')
+
     setIsUploading(true)
     setUploadStatus("uploading")
-    setProgress(0)
+    setMessages([])
     setError(null)
 
     try {
-      // Use the new API service layer with optional force actions
-      const response = await etlService.uploadFilesWithProgress(userId, selectedFiles, forceActions)
+      // Step 1: Upload files and get job_id
+      console.log('[DATA-HUB] Uploading files...')
+      const uploadResponse = await etlService.uploadFilesWithProgress(userId, selectedFiles, forceActions)
+      const jobId = uploadResponse.job_id
 
-      // Read SSE stream
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      console.log('[DATA-HUB] Got job_id:', jobId)
+      console.log('[DATA-HUB] Connecting to stream...')
 
-      if (!reader) {
-        throw new Error("No response body")
+      // Step 2: Connect to NDJSON stream
+      const streamUrl = etlService.getStreamUrl(jobId)
+      const streamResponse = await fetch(streamUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/x-ndjson',
+          'Authorization': `Bearer ${userId}`,
+        },
+      })
+
+      if (!streamResponse.ok) {
+        throw new Error(`Stream failed: ${streamResponse.statusText}`)
       }
+
+      if (!streamResponse.body) {
+        throw new Error('No response body')
+      }
+
+      console.log('[DATA-HUB] Stream connected, reading messages...')
+
+      // Step 3: Read NDJSON stream
+      const reader = streamResponse.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log('[DATA-HUB] Stream ended')
+          break
+        }
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data: ETLProgressUpdate = JSON.parse(line.slice(6))
+          if (!line.trim()) continue
 
-            setProgress(data.progress)
-            setCurrentStep(data.current_step)
-            setStatusMessage(data.message)
+          try {
+            const data = JSON.parse(line)
+            console.log('[DATA-HUB] Message:', data.type, data)
 
-            if (data.status === 'duplicates_detected') {
+            if (data.type === 'message') {
+              // Add message to list
+              setMessages(prev => [...prev, {
+                type: data.message_type || 'info',
+                content: data.content || ''
+              }])
+            } else if (data.type === 'duplicates_detected') {
               // Batch duplicates found - show all at once
               const dupFiles: DuplicateFile[] = []
 
               if (data.duplicates) {
-                Object.entries(data.duplicates).forEach(([fileName, dupInfo]: [string, { dataset_name: string; overlap_percentage: number; new_rows: number; total_rows: number }]) => {
+                Object.entries(data.duplicates).forEach(([fileName, dupInfo]) => {
+                  const info = dupInfo as { dataset_name: string; overlap_percentage: number; new_rows: number; total_rows: number }
                   dupFiles.push({
                     fileName,
-                    datasetName: dupInfo.dataset_name,
-                    overlapPercentage: dupInfo.overlap_percentage,
-                    newRows: dupInfo.new_rows,
+                    datasetName: info.dataset_name,
+                    overlapPercentage: info.overlap_percentage,
+                    newRows: info.new_rows,
                   })
                 })
               }
@@ -161,26 +207,43 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
               setIsUploading(false)
               // Stream has ended, user needs to resolve all duplicates
               return
-            } else if (data.status === 'completed') {
-              setIsUploading(false)
-              setSelectedFiles([])
+            } else if (data.type === 'complete') {
+              console.log('[DATA-HUB] Processing complete!')
 
-              // Refresh datasets
-              const updatedDatasets = await etlService.getDatasets(userId)
-              setDatasets(updatedDatasets)
+              // Add success message
+              setMessages(prev => [...prev, {
+                type: 'success',
+                content: 'Processing complete!'
+              }])
 
-              // Reset upload UI immediately
-              setUploadStatus("idle")
-              setProgress(0)
-            } else if (data.status === 'error') {
+              // Small delay before resetting UI
+              setTimeout(async () => {
+                setIsUploading(false)
+                setSelectedFiles([])
+
+                // Refresh datasets
+                const updatedDatasets = await etlService.getDatasets(userId)
+                setDatasets(updatedDatasets)
+
+                // Reset upload UI
+                setUploadStatus("idle")
+                setMessages([])
+              }, 2000)
+            } else if (data.type === 'error') {
+              console.error('[DATA-HUB] Error:', data.error)
               setUploadStatus("error")
               setError(data.error || "Upload failed")
               setIsUploading(false)
+            } else if (data.type === 'keepalive') {
+              console.log('[DATA-HUB] Keepalive ping')
             }
+          } catch (parseError) {
+            console.error('[DATA-HUB] Parse error:', parseError, 'Line:', line)
           }
         }
       }
     } catch (err) {
+      console.error('[DATA-HUB] Upload error:', err)
       setUploadStatus("error")
       setError(err instanceof Error ? err.message : "Upload failed")
       setIsUploading(false)
@@ -358,22 +421,61 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
         </Card>
       )}
 
-      {/* Progress Section */}
+      {/* Processing Messages Section */}
       {uploadStatus === "uploading" && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <div className="h-4 w-4 border-2 border-primary border-t-transparent animate-spin" />
-              Processing ETL Pipeline
+              Processing Files
             </CardTitle>
-            <CardDescription className="text-xs">{currentStep}</CardDescription>
+            <CardDescription className="text-xs">
+              {messages.length} updates
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Progress value={progress} className="h-2" />
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">{statusMessage}</span>
-              <span className="font-mono font-medium">{progress}%</span>
-            </div>
+          <CardContent className="p-0">
+            <ScrollArea ref={scrollAreaRef} className="h-[400px] px-6 py-4">
+              {messages.length === 0 && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <div className="h-4 w-4 border-2 border-muted-foreground border-t-transparent animate-spin" />
+                    <span className="text-sm">Initializing...</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                      msg.type === 'success'
+                        ? 'bg-green-50 border-green-200 text-green-900'
+                        : msg.type === 'error'
+                        ? 'bg-red-50 border-red-200 text-red-900'
+                        : 'bg-blue-50 border-blue-200 text-blue-900'
+                    }`}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      {msg.type === 'success' ? (
+                        <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : msg.type === 'error' ? (
+                        <svg className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      )}
+                    </div>
+                    <p className="text-sm flex-1">{msg.content}</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       )}
@@ -393,7 +495,7 @@ export function DataHubClient({ initialDatasets, userId }: DataHubClientProps) {
               onClick={() => {
                 setUploadStatus("idle")
                 setError(null)
-                setProgress(0)
+                setMessages([])
               }}
               variant="outline"
               size="sm"

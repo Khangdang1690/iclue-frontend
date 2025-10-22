@@ -6,17 +6,56 @@ import { uploadFiles } from './client';
 import { apiClient } from './client';
 import { Dataset } from './types';
 
+// Base URL for ETL endpoints
+const ETL_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/etl`;
+
+export interface UploadResponse {
+  job_id: string;
+  status: string;
+}
+
 export const etlService = {
   /**
-   * Upload files for ETL processing with SSE streaming
-   * Returns the Response object for SSE streaming
+   * Upload files for ETL processing (fire-and-forget)
+   * Returns job_id for streaming progress
    */
   async uploadFilesWithProgress(
     userId: string,
     files: File[],
     forceActions?: Record<string, 'skip' | 'replace' | 'append_anyway'>
-  ): Promise<Response> {
-    return uploadFiles('/api/etl/upload', files, userId, forceActions);
+  ): Promise<UploadResponse> {
+    const response = await uploadFiles('/api/etl/upload', files, userId, forceActions);
+
+    // Check if response has content
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error(`Server returned non-JSON response`);
+    }
+
+    // Read response as text first (more reliable than using .json() directly)
+    const text = await response.text();
+    const data = JSON.parse(text);
+
+    // Validate response structure
+    if (!data || !data.job_id) {
+      throw new Error(`Invalid response: missing job_id`);
+    }
+
+    return data;
+  },
+
+  /**
+   * Get stream URL for a job
+   */
+  getStreamUrl(jobId: string): string {
+    return `${ETL_BASE_URL}/${jobId}/stream`;
+  },
+
+  /**
+   * Get status URL for polling fallback
+   */
+  getStatusUrl(jobId: string): string {
+    return `${ETL_BASE_URL}/${jobId}/status`;
   },
 
   /**

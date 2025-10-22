@@ -40,7 +40,7 @@ export default async function DatasetsPage() {
             {datasets.length} {datasets.length === 1 ? 'dataset' : 'datasets'} in your workspace
           </p>
         </div>
-        <Link href="/dashboard/upload">
+        <Link href="/dashboard/data-hub">
           <Button size="sm">
             <Upload className="h-3.5 w-3.5 mr-2" />
             Upload
@@ -59,7 +59,7 @@ export default async function DatasetsPage() {
               <p className="text-sm text-muted-foreground text-center mb-6 max-w-md">
                 Upload your first dataset to begin AI-powered analysis
               </p>
-              <Link href="/dashboard/upload">
+              <Link href="/dashboard/data-hub">
                 <Button size="sm">
                   <Upload className="h-3.5 w-3.5 mr-2" />
                   Upload Dataset

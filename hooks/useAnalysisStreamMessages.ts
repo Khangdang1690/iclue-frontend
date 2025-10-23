@@ -27,6 +27,7 @@ export function useAnalysisStreamMessages({
   const [error, setError] = useState<Error | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const previousAnalysisIdRef = useRef<string | null>(null);
+  const sawCompletionRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!analysisId || !enabled) {
@@ -39,6 +40,7 @@ export function useAnalysisStreamMessages({
       console.log('[MESSAGE-STREAM] New analysis, clearing previous messages');
       setMessages([]);
       previousAnalysisIdRef.current = analysisId;
+      sawCompletionRef.current = false;
     }
 
     // Abort existing connection
@@ -126,6 +128,7 @@ export function useAnalysisStreamMessages({
 
                 console.log('[MESSAGE-STREAM] Setting isStreaming to FALSE');
                 setIsStreaming(false);
+                sawCompletionRef.current = true;
                 break;
               }
 
@@ -161,6 +164,36 @@ export function useAnalysisStreamMessages({
       } finally {
         console.log('[MESSAGE-STREAM] 🏁 Finally block - setting isStreaming to false');
         setIsStreaming(false);
+
+        // Fallback: if stream ended without a completion event, check analysis status
+        // This handles races where the backend completes before the client registers
+        if (analysisId && !sawCompletionRef.current) {
+          try {
+            const statusRes = await fetch(`${API_URL}/api/analyses/${analysisId}`, {
+              method: 'GET',
+              headers: { 'Accept': 'application/json' },
+            });
+            if (statusRes.ok) {
+              const statusJson = await statusRes.json();
+              const status = statusJson?.analysis?.status;
+              if (status === 'completed') {
+                const completionMessage: StreamMessage = {
+                  type: 'complete',
+                  content: '✅ Analysis complete! (detected via status check)',
+                  timestamp: new Date().toISOString(),
+                };
+                setMessages(prev => [...prev, completionMessage]);
+                sawCompletionRef.current = true;
+              } else if (status === 'failed') {
+                const errorMsg = statusJson?.analysis?.error_message || 'Analysis failed';
+                setMessages(prev => [...prev, { type: 'error', content: `Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
+                setError(new Error(errorMsg));
+              }
+            }
+          } catch (e) {
+            console.warn('[MESSAGE-STREAM] Fallback status check failed', e);
+          }
+        }
       }
     })();
 

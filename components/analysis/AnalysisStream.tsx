@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useAnalysisStreamMessages } from '@/hooks/useAnalysisStreamMessages'
+import { useAnalysisStream } from '@/hooks/useAnalysisStream'
 import { CheckCircle2, AlertCircle, Sparkles, Lightbulb, TrendingUp, Brain } from 'lucide-react'
 
 interface AnalysisStreamProps {
@@ -14,6 +15,10 @@ export function AnalysisStream({ analysisId, onComplete }: AnalysisStreamProps) 
     analysisId,
     enabled: !!analysisId
   })
+  const { progress, isConnected } = useAnalysisStream({
+    analysisId,
+    enabled: !!analysisId,
+  })
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const hasCalledComplete = React.useRef(false)
 
@@ -22,33 +27,45 @@ export function AnalysisStream({ analysisId, onComplete }: AnalysisStreamProps) 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Call onComplete when streaming finishes and we have messages
+  // Also call onComplete when progress status becomes completed (ETL-style parity)
   React.useEffect(() => {
-    console.log('[ANALYSIS-STREAM] Effect - isStreaming:', isStreaming, 'messages:', messages.length, 'hasCalledComplete:', hasCalledComplete.current)
-    console.log('[ANALYSIS-STREAM] onComplete prop:', typeof onComplete, onComplete ? 'defined' : 'UNDEFINED')
-
-    if (!isStreaming && messages.length > 0 && !hasCalledComplete.current) {
-      const lastMessage = messages[messages.length - 1]
-      console.log('[ANALYSIS-STREAM] Last message type:', lastMessage?.type)
-
-      if (lastMessage?.type === 'complete') {
-        console.log('[ANALYSIS-STREAM] ✅ Completion detected! Calling onComplete...')
-        hasCalledComplete.current = true
-
-        if (onComplete) {
-          console.log('[ANALYSIS-STREAM] 🔥 EXECUTING onComplete callback NOW')
-          try {
-            onComplete()
-            console.log('[ANALYSIS-STREAM] ✓ onComplete executed successfully')
-          } catch (error) {
-            console.error('[ANALYSIS-STREAM] ❌ Error executing onComplete:', error)
-          }
-        } else {
-          console.error('[ANALYSIS-STREAM] ❌ onComplete is undefined/null!')
+    if (progress?.status === 'completed' && !hasCalledComplete.current) {
+      hasCalledComplete.current = true
+      if (onComplete) {
+        try {
+          onComplete()
+        } catch (err) {
+          console.error('[ANALYSIS-STREAM] Error in onComplete (progress hook):', err)
         }
       }
     }
-  }, [isStreaming, messages, onComplete])
+  }, [progress?.status, onComplete])
+
+  // Fallback: if stream disconnects and no completion observed, poll status once
+  React.useEffect(() => {
+    if (!analysisId) return
+    if (hasCalledComplete.current) return
+    if (isConnected) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const res = await fetch(`${base}/api/analyses/${analysisId}`, { headers: { Accept: 'application/json' } })
+        if (!res.ok) return
+        const json = await res.json()
+        const status = json?.analysis?.status
+        if (!cancelled && status === 'completed' && !hasCalledComplete.current) {
+          hasCalledComplete.current = true
+          onComplete?.()
+        }
+      } catch {}
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [analysisId, isConnected, onComplete])
 
   // Get icon for message type
   const getMessageIcon = (type: string) => {
